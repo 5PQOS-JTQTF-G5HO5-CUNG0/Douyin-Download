@@ -4,7 +4,7 @@ const { ErrorCode, createSuccessResult, createErrorResult } = require("../types/
 const SafeLogger = require("../logger/safeLogger");
 
 /**
- * 主解析器：基于真实无头浏览器环境监听并提取抖音作品
+ * 主解析器：基于真实无头浏览器环境（PC Web 端）监听并提取抖音作品
  */
 class DouyinBrowserResolver extends VideoResolver {
   constructor() {
@@ -23,7 +23,7 @@ class DouyinBrowserResolver extends VideoResolver {
     if (!this.browser) {
       if (this.isInitializing) {
         while (this.isInitializing) {
-          await new Promise(r => setTimeout(r, 100));
+          await new Promise((r) => setTimeout(r, 100));
         }
         return this.browser;
       }
@@ -35,15 +35,15 @@ class DouyinBrowserResolver extends VideoResolver {
           args: [
             "--no-sandbox",
             "--disable-setuid-sandbox",
-            "--disable-blink-features=AutomationControlled",
-            "--disable-infobars",
-            "--window-size=412,915"
+            "--disable-dev-shm-usage",
+            "--disable-accelerated-2d-canvas",
+            "--no-first-run",
+            "--no-zygote",
+            "--disable-gpu",
+            "--disable-blink-features=AutomationControlled"
           ]
         });
         SafeLogger.info(this.name, "Chromium 启动完成");
-      } catch (err) {
-        SafeLogger.error(this.name, "Chromium 启动失败", { error: err.message });
-        throw err;
       } finally {
         this.isInitializing = false;
       }
@@ -59,19 +59,16 @@ class DouyinBrowserResolver extends VideoResolver {
     try {
       const browser = await this._getBrowser();
 
-      // 构造类似真实 Android Chrome 移动端的上下文环境
+      // 使用真实桌面端 Chrome UA，抖音 PC Web 端会自动触发 /aweme/v1/web/aweme/detail
       context = await browser.newContext({
         userAgent:
-          "Mozilla/5.0 (Linux; Android 13; Pixel 7 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
-        viewport: { width: 412, height: 915 },
-        deviceScaleFactor: 2.625,
-        isMobile: true,
-        hasTouch: true,
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        viewport: { width: 1280, height: 720 },
         locale: "zh-CN",
         timezoneId: "Asia/Shanghai"
       });
 
-      // 抹除 navigator.webdriver 特征
+      // 抹除 webdriver 特征
       await context.addInitScript(() => {
         Object.defineProperty(navigator, "webdriver", {
           get: () => undefined
@@ -84,32 +81,38 @@ class DouyinBrowserResolver extends VideoResolver {
       let finalUrl = rawUrl;
       const redirectChain = [];
 
-      // 核心：监听页面网络请求与响应，拦截自身发起的有效作品数据
+      // Promise 监听器：一旦截获到 aweme 数据，立即唤醒
+      let onAwemeCaptured = null;
+      const awemePromise = new Promise((resolve) => {
+        onAwemeCaptured = resolve;
+      });
+
+      // 核心：监听页面网络请求与响应，拦截真实接口
       page.on("response", async (response) => {
         try {
           const respUrl = response.url();
           const contentType = response.headers()["content-type"] || "";
 
-          // 匹配可能包含作品数据的异步接口（aweme/detail, iteminfo 等）
+          // 匹配 PC 端核心接口 /aweme/v1/web/aweme/detail 或通用 aweme 详情
           if (
-            (respUrl.includes("/aweme/detail") ||
+            (respUrl.includes("aweme/v1/web/aweme/detail") ||
+              respUrl.includes("/aweme/detail") ||
               respUrl.includes("/iteminfo") ||
-              respUrl.includes("/web/api/v2/aweme") ||
-              respUrl.includes("share/video")) &&
+              respUrl.includes("/web/api/v2/aweme")) &&
             contentType.includes("application/json")
           ) {
             const body = await response.json();
             if (body && (body.aweme_detail || (body.item_list && body.item_list[0]))) {
               capturedAwemeData = body.aweme_detail || body.item_list[0];
               SafeLogger.info(this.name, "通过网络拦截成功捕获作品数据包", {
-                apiUrl: respUrl,
-                status: response.status(),
-                contentLength: response.headers()["content-length"]
+                apiUrl: respUrl.slice(0, 100),
+                status: response.status()
               });
+              if (onAwemeCaptured) onAwemeCaptured(capturedAwemeData);
             }
           }
         } catch (_err) {
-          // 忽略流式或非 JSON 解析异常
+          // 忽略非 JSON 或流错误
         }
       });
 
@@ -123,68 +126,109 @@ class DouyinBrowserResolver extends VideoResolver {
 
       SafeLogger.info(this.name, "开始访问抖音链接", { rawUrl });
 
-      // 导航至抖音链接，最多等待 18 秒
+      // 第一阶段：导航至初始链接，追踪 302 重定向
       try {
         await page.goto(rawUrl, {
           waitUntil: "domcontentloaded",
-          timeout: 18000
+          timeout: 15000
         });
       } catch (navErr) {
-        SafeLogger.warn(this.name, "页面导航超时或异常，尝试从已加载内容中分析", {
+        SafeLogger.warn(this.name, "首轮页面导航超时或异常", {
           error: navErr.message,
           finalUrl
         });
       }
 
-      // 等待 1.5 秒让异步数据包接收完
-      await page.waitForTimeout(1500);
+      // 尝试提取作品 ID（支持 video/xxx 或 note/xxx）
+      let itemId = this._extractWorkId(finalUrl) || this._extractWorkId(rawUrl);
 
-      const pageTitle = await page.title();
-      const pageHtml = await page.content();
-      const durationMs = Date.now() - startTime;
-
-      SafeLogger.info(this.name, "页面基础加载完成", {
-        finalUrl,
-        redirectChain,
-        pageTitle,
-        durationMs,
-        htmlSnippet: pageHtml.slice(0, 200)
-      });
-
-      // 检查是否遇到验证码/风控拦截页
-      if (
-        pageHtml.includes("verify") ||
-        pageHtml.includes("captcha") ||
-        pageHtml.includes("验证码") ||
-        pageHtml.includes("secsdk")
-      ) {
-        // 如果虽然有风控提示但同时拦截到了有效作品，优先放行
-        if (!capturedAwemeData) {
-          SafeLogger.warn(this.name, "检测到页面需要安全验证", { finalUrl });
-          return createErrorResult({
-            error_code: ErrorCode.NEED_USER_INTERACTION,
-            message: "抖音要求网页环境验证，请稍后重试"
+      // 如果尚未从 URL 提取到，尝试从 DOM/_ROUTER_DATA 提取
+      if (!itemId) {
+        try {
+          itemId = await page.evaluate(() => {
+            const r = window._ROUTER_DATA;
+            if (r && r.loaderData) {
+              for (const key of Object.keys(r.loaderData)) {
+                const val = r.loaderData[key];
+                if (val && val.itemId) return String(val.itemId);
+              }
+            }
+            return null;
           });
+        } catch (_) {}
+      }
+
+      // 检查是否重定向到了抖音首页（作品已被删除或设为私密）
+      const isHomePage =
+        /^https?:\/\/(www\.)?douyin\.com\/?(\?.*)?$/.test(finalUrl) ||
+        finalUrl.includes("douyin.com/home");
+      if (isHomePage && !itemId) {
+        SafeLogger.warn(this.name, "短链接重定向至抖音首页，作品可能已下架或删除", { finalUrl, rawUrl });
+        return createErrorResult({
+          error_code: ErrorCode.EMPTY_DATA,
+          message: "作品可能已删除、下架或设为私密 (EMPTY_DATA)"
+        });
+      }
+
+      // 第二阶段：如果捕获到 itemId 且尚未抓到数据包，直接进入 PC Web 详情页触发 aweme/detail
+      if (itemId && !capturedAwemeData) {
+        const desktopDetailUrl = `https://www.douyin.com/video/${itemId}`;
+        if (!finalUrl.includes(`/video/${itemId}`)) {
+          SafeLogger.info(this.name, "检测到作品 ID，跳转至桌面端视频详情页触发数据包", {
+            itemId,
+            desktopDetailUrl
+          });
+          try {
+            await page.goto(desktopDetailUrl, {
+              waitUntil: "domcontentloaded",
+              timeout: 15000
+            });
+          } catch (deskErr) {
+            SafeLogger.warn(this.name, "桌面详情页导航提示", { error: deskErr.message });
+          }
         }
       }
 
-      // 如果通过网络拦截捕获到了作品数据
+      // 等待网络包捕获（最多等待 3.5 秒）
+      if (!capturedAwemeData) {
+        await Promise.race([
+          awemePromise,
+          new Promise((resolve) => setTimeout(resolve, 3500))
+        ]);
+      }
+
+      const durationMs = Date.now() - startTime;
+      const pageTitle = await page.title().catch(() => "");
+      const pageHtml = await page.content().catch(() => "");
+
+      // 检查是否遇到真实验证码/风控拦截页（如 verify.snssdk.com 或滑块弹窗）
+      const isRealCaptcha =
+        finalUrl.includes("verify.snssdk.com") ||
+        pageHtml.includes("captcha-verify-image") ||
+        pageHtml.includes("secsdk-captcha-drag-wrapper") ||
+        pageHtml.includes("验证码中间页");
+
+      if (isRealCaptcha && !capturedAwemeData) {
+        SafeLogger.warn(this.name, "检测到页面需要安全滑块验证", { finalUrl });
+        return createErrorResult({
+          error_code: ErrorCode.NEED_USER_INTERACTION,
+          message: "抖音要求网页环境验证，请稍后重试"
+        });
+      }
+
+      // 1. 如果通过网络拦截成功抓取了 aweme 数据
       if (capturedAwemeData) {
         return this._mapAwemeToResult(capturedAwemeData, durationMs);
       }
 
-      // 如果未拦截到独立接口，尝试从当前页面 DOM / 挂载的 window 对象直接读取
+      // 2. 如果网络拦截未中，尝试从 DOM / RENDER_DATA 提取
       const domData = await page.evaluate(() => {
         try {
-          const ssr = window._SSR_DATA || window._ROUTER_DATA || window.__INIT_PROPS__;
-          if (ssr) return ssr;
-
           const renderDataEl = document.getElementById("RENDER_DATA");
           if (renderDataEl && renderDataEl.textContent) {
             return JSON.parse(decodeURIComponent(renderDataEl.textContent));
           }
 
-          // 尝试查找页面内的 video 标签
           const videoEl = document.querySelector("video");
           if (videoEl && videoEl.src) {
             return {
@@ -192,15 +236,14 @@ class DouyinBrowserResolver extends VideoResolver {
               page_title: document.title
             };
           }
-        } catch (_e) {
-        }
+        } catch (_e) {}
         return null;
       });
 
       if (domData) {
         if (domData.direct_video_src) {
           return createSuccessResult({
-            id: this._extractWorkId(finalUrl) || "direct_" + Date.now(),
+            id: itemId || "direct_" + Date.now(),
             title: domData.page_title || pageTitle || "抖音短视频",
             author: "抖音创作者",
             cover_url: "",
@@ -220,11 +263,11 @@ class DouyinBrowserResolver extends VideoResolver {
         }
       }
 
-      // 若页面正常返回 HTML 但没有作品数据
-      SafeLogger.warn(this.name, "页面返回了 HTML，但未能提取到作品数据结构", {
+      // 3. 兜底错误
+      SafeLogger.warn(this.name, "页面已加载但未能提取到有效作品数据", {
         finalUrl,
         pageTitle,
-        htmlSnippet: pageHtml.slice(0, 200)
+        itemId
       });
 
       return createErrorResult({
@@ -249,7 +292,7 @@ class DouyinBrowserResolver extends VideoResolver {
   _mapAwemeToResult(aweme, durationMs) {
     const id = aweme.aweme_id || aweme.id || String(Date.now());
     const title = aweme.desc || aweme.title || `抖音作品_${id}`;
-    const author = aweme.author ? (aweme.author.nickname || aweme.author.name || "抖音创作者") : "抖音创作者";
+    const author = aweme.author ? aweme.author.nickname || aweme.author.name || "抖音创作者" : "抖音创作者";
 
     let coverUrl = "";
     if (aweme.video && aweme.video.cover && aweme.video.cover.url_list && aweme.video.cover.url_list[0]) {
@@ -264,7 +307,7 @@ class DouyinBrowserResolver extends VideoResolver {
     if (aweme.video && aweme.video.play_addr && aweme.video.play_addr.url_list) {
       const rawUrls = aweme.video.play_addr.url_list;
       if (rawUrls.length > 0) {
-        // playwm 替换为纯净无水印 play
+        // 优先选取非 playwm 的纯净直链或者替换 playwm
         const cleanVideoUrl = rawUrls[0].replace("playwm", "play");
         mediaList.push({
           type: "video",
@@ -331,7 +374,7 @@ class DouyinBrowserResolver extends VideoResolver {
 
   _extractWorkId(url) {
     if (!url) return null;
-    const match = url.match(/(?:video|note)\/([0-9]{18,20})/);
+    const match = url.match(/(?:video|note)\/([0-9]{15,22})/);
     return match ? match[1] : null;
   }
 }

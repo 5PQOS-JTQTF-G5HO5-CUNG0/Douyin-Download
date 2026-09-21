@@ -86,11 +86,12 @@ DouyinDownloader/
 
 ---
 
-## 阶段二接入指引（真实抖音解析引擎）
+## 阶段二已完成（真实抖音解析引擎已接入）
 
-在阶段二中，只需新建一个 `RealDouyinResolver : DouyinResolver`，实现：
-1. 提取短链接并跟随 302 重定向获取长链接；
-2. 提取 `video_id`；
-3. 请求抖音官方或自建解析 API，获取无水印媒体直链；
-4. 在 `MainViewModel` 中将默认注入的 `MockDouyinResolver()` 替换为 `RealDouyinResolver()`。
-UI 层、下载层、相册落盘层均无需任何重构变动。
+当前应用已默认启用 `RealDouyinResolver`：
+1. **短链自动还原**：支持输入 `v.douyin.com` 短链接，自动跟随 302 重定向获取作品长链接；
+2. **多适配器架构**：
+   - 优先通过 `DouyinWebAdapter` 获取移动端 SSR 页面并提取无水印视频直链（`playwm` 自动替换为 `play`）；
+   - 降级支持 `DouyinApiAdapter` 官方 API 接口备用兜底；
+3. **安全与脱敏**：不硬编码任何私人 Cookie 或签名密匙，出现风控拦截时给出友好提示；
+4. **测试桩保留**：输入包含 `mock`、`fail`、`notfound`、`expired`、`timeout` 等保留字时自动走模拟测试桩，方便随时脱机验证 UI 容错。

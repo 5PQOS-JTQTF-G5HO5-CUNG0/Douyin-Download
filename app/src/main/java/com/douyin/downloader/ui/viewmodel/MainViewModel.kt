@@ -5,7 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.douyin.downloader.data.model.ResolveResult
 import com.douyin.downloader.domain.resolver.DouyinResolver
-import com.douyin.downloader.domain.resolver.MockDouyinResolver
+import com.douyin.downloader.domain.resolver.RealDouyinResolver
 import com.douyin.downloader.download.AppDownloadManager
 import com.douyin.downloader.download.DownloadState
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class MainViewModel(
-    private val resolver: DouyinResolver = MockDouyinResolver()
+    private val resolver: DouyinResolver = RealDouyinResolver()
 ) : ViewModel() {
 
     private val _inputText = MutableStateFlow("")

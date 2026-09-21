@@ -253,7 +253,7 @@ fun HomeScreen(
                 }
             }
 
-            // 阶段一 Mock 运行模式提示卡片
+            // 使用指南卡片
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
@@ -276,13 +276,13 @@ fun HomeScreen(
                             tint = MaterialTheme.colorScheme.primary
                         )
                         Text(
-                            text = "阶段一：Mock 模式全链路测试指南",
+                            text = "使用指南 (真实抖音解析引擎已就绪)",
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                     }
                     Text(
-                        text = "• 输入任意有效 URL 点击解析：返回真实可用 MP4，点击下载将保存至系统相册 (Movies/Douyin)。\n• 输入含 'fail' / 'notfound'：模拟作品已删除异常。\n• 输入含 'expired'：模拟媒体链接过期。\n• 输入含 'timeout'：模拟网络超时。\n• 支持从系统抖音客户端直接点击「分享」选择本应用进入。",
+                        text = "• 支持从抖音 App 点击「分享」→ 选择「抖音下载助手」一键解析。\n• 支持在上方输入框粘贴包含短链接 (v.douyin.com) 的任意分享文案。\n• 自动获取无水印高清视频直链，点击下载自动保存到相册 (Movies/Douyin)。\n• 输入含 'mock' 或 'fail' 等保留词时，可快速体验模拟兜底链路。",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                         lineHeight = MaterialTheme.typography.bodyMedium.lineHeight * 1.25

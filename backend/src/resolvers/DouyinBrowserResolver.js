@@ -40,7 +40,8 @@ class DouyinBrowserResolver extends VideoResolver {
             "--no-first-run",
             "--no-zygote",
             "--disable-gpu",
-            "--disable-blink-features=AutomationControlled"
+            "--disable-blink-features=AutomationControlled",
+            "--lang=zh-CN,zh"
           ]
         });
         SafeLogger.info(this.name, "Chromium 启动完成");
@@ -59,7 +60,7 @@ class DouyinBrowserResolver extends VideoResolver {
     try {
       const browser = await this._getBrowser();
 
-      // 使用真实桌面端 Chrome UA，抖音 PC Web 端会自动触发 /aweme/v1/web/aweme/detail
+      // 构造无痕 PC Chrome 环境
       context = await browser.newContext({
         userAgent:
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -68,11 +69,20 @@ class DouyinBrowserResolver extends VideoResolver {
         timezoneId: "Asia/Shanghai"
       });
 
-      // 抹除 webdriver 特征
+      // 注入请求头伪装
+      await context.setExtraHTTPHeaders({
+        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+        "sec-ch-ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": '"Windows"'
+      });
+
+      // 抹除自动化痕迹，伪装为真实 Win32 Chrome
       await context.addInitScript(() => {
-        Object.defineProperty(navigator, "webdriver", {
-          get: () => undefined
-        });
+        Object.defineProperty(navigator, "webdriver", { get: () => undefined });
+        Object.defineProperty(navigator, "languages", { get: () => ["zh-CN", "zh", "en"] });
+        Object.defineProperty(navigator, "platform", { get: () => "Win32" });
+        window.chrome = { runtime: {} };
       });
 
       page = await context.newPage();
@@ -95,8 +105,8 @@ class DouyinBrowserResolver extends VideoResolver {
 
           // 匹配 PC 端核心接口 /aweme/v1/web/aweme/detail 或通用 aweme 详情
           if (
-            (respUrl.includes("aweme/v1/web/aweme/detail") ||
-              respUrl.includes("/aweme/detail") ||
+            (respUrl.includes("aweme/detail") ||
+              respUrl.includes("aweme/v1") ||
               respUrl.includes("/iteminfo") ||
               respUrl.includes("/web/api/v2/aweme")) &&
             contentType.includes("application/json")
@@ -126,11 +136,11 @@ class DouyinBrowserResolver extends VideoResolver {
 
       SafeLogger.info(this.name, "开始访问抖音链接", { rawUrl });
 
-      // 第一阶段：导航至初始链接，追踪 302 重定向
+      // 第一阶段：导航至初始短链接，追踪 302 重定向
       try {
         await page.goto(rawUrl, {
           waitUntil: "domcontentloaded",
-          timeout: 15000
+          timeout: 20000
         });
       } catch (navErr) {
         SafeLogger.warn(this.name, "首轮页面导航超时或异常", {
@@ -139,7 +149,7 @@ class DouyinBrowserResolver extends VideoResolver {
         });
       }
 
-      // 尝试提取作品 ID（支持 video/xxx 或 note/xxx）
+      // 提取作品 ID（支持 video/xxx 或 note/xxx）
       let itemId = this._extractWorkId(finalUrl) || this._extractWorkId(rawUrl);
 
       // 如果尚未从 URL 提取到，尝试从 DOM/_ROUTER_DATA 提取
@@ -181,7 +191,7 @@ class DouyinBrowserResolver extends VideoResolver {
           try {
             await page.goto(desktopDetailUrl, {
               waitUntil: "domcontentloaded",
-              timeout: 15000
+              timeout: 20000
             });
           } catch (deskErr) {
             SafeLogger.warn(this.name, "桌面详情页导航提示", { error: deskErr.message });
@@ -189,11 +199,11 @@ class DouyinBrowserResolver extends VideoResolver {
         }
       }
 
-      // 等待网络包捕获（最多等待 3.5 秒）
+      // 等待网络包捕获（跨国 VPS 网络通信，放宽至 8 秒超时）
       if (!capturedAwemeData) {
         await Promise.race([
           awemePromise,
-          new Promise((resolve) => setTimeout(resolve, 3500))
+          new Promise((resolve) => setTimeout(resolve, 8000))
         ]);
       }
 
@@ -263,11 +273,13 @@ class DouyinBrowserResolver extends VideoResolver {
         }
       }
 
-      // 3. 兜底错误
+      // 3. 兜底错误（打印丰富诊断）
       SafeLogger.warn(this.name, "页面已加载但未能提取到有效作品数据", {
         finalUrl,
         pageTitle,
-        itemId
+        itemId,
+        htmlLength: pageHtml.length,
+        htmlSnippet: pageHtml.slice(0, 300)
       });
 
       return createErrorResult({

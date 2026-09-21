@@ -2,6 +2,9 @@ FROM mcr.microsoft.com/playwright:v1.42.1-jammy
 
 WORKDIR /app
 
+# 安装中文字体支持，避免 Linux 容器字体指纹缺失或渲染异常
+RUN apt-get update && apt-get install -y fonts-wqy-zenhei fonts-wqy-microhei && rm -rf /var/lib/apt/lists/*
+
 # 安装依赖
 COPY package*.json ./
 RUN npm install --omit=dev

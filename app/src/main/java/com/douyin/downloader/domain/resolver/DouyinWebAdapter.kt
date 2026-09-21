@@ -197,7 +197,7 @@ class DouyinWebAdapter(private val okHttpClient: OkHttpClient) {
                 val images = aweme.optJSONArray("images")
                 if (images != null && images.length() > 0) {
                     val firstImg = images.optJSONObject(0)
-                    val imgUrl = firstImg?.optJSONObject("url_list")?.optString(0, "") ?: ""
+                    val imgUrl = firstImg?.optJSONArray("url_list")?.optString(0, "") ?: ""
                     return Result.success(
                         ResolveResult(
                             ok = true,

@@ -6,6 +6,7 @@ import com.douyin.downloader.data.model.ResolverException
 import com.douyin.downloader.util.UrlExtractor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
@@ -128,8 +129,8 @@ class RealDouyinResolver : DouyinResolver {
                         location
                     } else {
                         // 相对路径
-                        val originalUri = okhttp3.HttpUrl.get(currentUrl)
-                        originalUri.resolve(location)?.toString() ?: location
+                        val originalUri = currentUrl.toHttpUrlOrNull()
+                        originalUri?.resolve(location)?.toString() ?: location
                     }
                     redirectCount++
                     continue

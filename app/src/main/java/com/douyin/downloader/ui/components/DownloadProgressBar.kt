@@ -56,7 +56,7 @@ fun DownloadProgressBar(
         }
 
         LinearProgressIndicator(
-            progress = { state.progress },
+            progress = state.progress,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(8.dp)

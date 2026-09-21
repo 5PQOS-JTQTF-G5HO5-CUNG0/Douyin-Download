@@ -31,6 +31,8 @@ class DownloadService : Service() {
         const val EXTRA_WORK_ID = "extra_work_id"
         const val EXTRA_TITLE = "extra_title"
         const val EXTRA_VIDEO_URL = "extra_video_url"
+        const val EXTRA_MEDIA_TYPE = "extra_media_type"
+        const val EXTRA_MIME_TYPE = "extra_mime_type"
 
         private const val NOTIFICATION_ID = 1001
         private const val SUCCESS_NOTIFICATION_ID = 1002
@@ -50,11 +52,13 @@ class DownloadService : Service() {
         when (intent?.action) {
             ACTION_START_DOWNLOAD -> {
                 val workId = intent.getStringExtra(EXTRA_WORK_ID) ?: ""
-                val title = intent.getStringExtra(EXTRA_TITLE) ?: "未知视频"
+                val title = intent.getStringExtra(EXTRA_TITLE) ?: "未知作品"
                 val videoUrl = intent.getStringExtra(EXTRA_VIDEO_URL) ?: ""
+                val mediaType = intent.getStringExtra(EXTRA_MEDIA_TYPE) ?: "video"
+                val mimeType = intent.getStringExtra(EXTRA_MIME_TYPE) ?: if (mediaType == "image") "image/jpeg" else "video/mp4"
                 if (videoUrl.isNotEmpty()) {
-                    startForegroundNotification(title)
-                    startDownloading(workId, title, videoUrl)
+                    startForegroundNotification(title, mediaType)
+                    startDownloading(workId, title, videoUrl, mediaType, mimeType)
                 }
             }
             ACTION_CANCEL_DOWNLOAD -> {
@@ -64,8 +68,8 @@ class DownloadService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun startForegroundNotification(title: String) {
-        val notification = buildProgressNotification(title, 0, false)
+    private fun startForegroundNotification(title: String, mediaType: String) {
+        val notification = buildProgressNotification(title, 0, false, mediaType)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
                 NOTIFICATION_ID,
@@ -80,7 +84,8 @@ class DownloadService : Service() {
     private fun buildProgressNotification(
         title: String,
         progress: Int,
-        indeterminate: Boolean
+        indeterminate: Boolean,
+        mediaType: String = "video"
     ): Notification {
         val openAppIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -102,8 +107,9 @@ class DownloadService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val typeText = if (mediaType == "image") "图片" else "视频"
         return NotificationCompat.Builder(this, DouyinApp.DOWNLOAD_CHANNEL_ID)
-            .setContentTitle("正在下载视频")
+            .setContentTitle("正在下载$typeText")
             .setContentText(title)
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setContentIntent(pendingOpenApp)
@@ -114,7 +120,13 @@ class DownloadService : Service() {
             .build()
     }
 
-    private fun startDownloading(workId: String, title: String, videoUrl: String) {
+    private fun startDownloading(
+        workId: String,
+        title: String,
+        videoUrl: String,
+        mediaType: String = "video",
+        mimeType: String = "video/mp4"
+    ) {
         currentDownloadJob?.cancel()
         currentDownloadJob = serviceScope.launch {
             AppDownloadManager.updateState(DownloadState.Connecting)
@@ -124,8 +136,10 @@ class DownloadService : Service() {
             var inputStream: InputStream? = null
 
             try {
-                val fileName = MediaStoreHelper.sanitizeFileName(title, workId)
-                val pair = MediaStoreHelper.createVideoOutputStream(applicationContext, fileName)
+                val isImage = mediaType == "image"
+                val ext = if (isImage) "jpg" else "mp4"
+                val fileName = MediaStoreHelper.sanitizeFileName(title, workId, ext)
+                val pair = MediaStoreHelper.createMediaOutputStream(applicationContext, fileName, mimeType, isImage)
                 targetUri = pair.first
                 outputStream = pair.second
 
@@ -192,7 +206,8 @@ class DownloadService : Service() {
                         val notification = buildProgressNotification(
                             title,
                             (progress * 100).toInt(),
-                            totalLength <= 0
+                            totalLength <= 0,
+                            mediaType
                         )
                         NotificationManagerCompat.from(this@DownloadService)
                             .notify(NOTIFICATION_ID, notification)
@@ -206,7 +221,7 @@ class DownloadService : Service() {
                 AppDownloadManager.updateState(DownloadState.Saving)
 
                 // 完成 MediaStore 写入
-                MediaStoreHelper.finishPendingVideo(applicationContext, targetUri)
+                MediaStoreHelper.finishPendingMedia(applicationContext, targetUri, mimeType)
 
                 AppDownloadManager.updateState(
                     DownloadState.Completed(
@@ -214,7 +229,7 @@ class DownloadService : Service() {
                         fileName = fileName
                     )
                 )
-                showSuccessNotification(title)
+                showSuccessNotification(title, mediaType)
 
             } catch (e: Exception) {
                 if (e is InterruptedException || AppDownloadManager.isDownloadCancelled()) {
@@ -239,7 +254,7 @@ class DownloadService : Service() {
         }
     }
 
-    private fun showSuccessNotification(title: String) {
+    private fun showSuccessNotification(title: String, mediaType: String = "video") {
         val openAppIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
@@ -250,15 +265,15 @@ class DownloadService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val typeText = if (mediaType == "image") "图片" else "视频"
         val notification = NotificationCompat.Builder(this, DouyinApp.DOWNLOAD_CHANNEL_ID)
-            .setContentTitle("下载完成，已保存到相册")
+            .setContentTitle("${typeText}下载完成，已保存到相册")
             .setContentText(title)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
             .setContentIntent(pendingOpenApp)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .build()
-
         NotificationManagerCompat.from(this).notify(SUCCESS_NOTIFICATION_ID, notification)
     }
 

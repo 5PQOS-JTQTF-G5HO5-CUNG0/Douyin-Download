@@ -315,28 +315,22 @@ class DouyinBrowserResolver extends VideoResolver {
 
     const mediaList = [];
 
-    // 视频地址提取
-    if (aweme.video && aweme.video.play_addr && aweme.video.play_addr.url_list) {
-      const rawUrls = aweme.video.play_addr.url_list;
-      if (rawUrls.length > 0) {
-        // 优先选取非 playwm 的纯净直链或者替换 playwm
-        const cleanVideoUrl = rawUrls[0].replace("playwm", "play");
-        mediaList.push({
-          type: "video",
-          url: cleanVideoUrl,
-          mime: "video/mp4",
-          expires_at: null
-        });
-      }
-    }
+    const isImageNote =
+      aweme.aweme_type === 68 || (Array.isArray(aweme.images) && aweme.images.length > 0);
 
-    // 图集提取 (如有)
-    if (mediaList.length === 0 && Array.isArray(aweme.images) && aweme.images.length > 0) {
+    if (isImageNote && Array.isArray(aweme.images) && aweme.images.length > 0) {
+      // 1. 图文作品提取：提取全部高清无水印图片
       for (const img of aweme.images) {
-        if (img.url_list && img.url_list[0]) {
+        const candidates = [...(img.url_list || []), ...(img.download_url_list || [])];
+        // 优先选取 jpeg 格式以保证相册与系统解码器最佳兼容性
+        const bestUrl =
+          candidates.find((u) => u.includes(".jpeg") || u.includes(".jpg")) ||
+          candidates[0];
+
+        if (bestUrl) {
           mediaList.push({
             type: "image",
-            url: img.url_list[0],
+            url: bestUrl,
             mime: "image/jpeg",
             expires_at: null
           });
@@ -344,6 +338,43 @@ class DouyinBrowserResolver extends VideoResolver {
       }
       if (!coverUrl && mediaList.length > 0) {
         coverUrl = mediaList[0].url;
+      }
+    } else {
+      // 2. 视频作品提取：优先提取兼容性最高的 H.264 MP4 视频流或最高码率流
+      let videoUrl = "";
+
+      if (aweme.video && Array.isArray(aweme.video.bit_rate) && aweme.video.bit_rate.length > 0) {
+        // 优先筛选 is_h265 === 0 (标准 H.264 MP4)，兼容所有 Android/iOS 播放器
+        const h264Item = aweme.video.bit_rate.find(
+          (b) => b.is_h265 === 0 && b.play_addr && Array.isArray(b.play_addr.url_list) && b.play_addr.url_list.length > 0
+        );
+        const selected = h264Item || aweme.video.bit_rate.find(
+          (b) => b.play_addr && Array.isArray(b.play_addr.url_list) && b.play_addr.url_list.length > 0
+        );
+        if (selected && selected.play_addr.url_list[0]) {
+          videoUrl = selected.play_addr.url_list[0];
+        }
+      }
+
+      if (
+        !videoUrl &&
+        aweme.video &&
+        aweme.video.play_addr &&
+        Array.isArray(aweme.video.play_addr.url_list) &&
+        aweme.video.play_addr.url_list.length > 0
+      ) {
+        videoUrl = aweme.video.play_addr.url_list[0];
+      }
+
+      // 剔除音频直链（如 .mp3，防止 BGM 误入视频流）
+      if (videoUrl && !videoUrl.includes(".mp3")) {
+        const cleanVideoUrl = videoUrl.replace("playwm", "play");
+        mediaList.push({
+          type: "video",
+          url: cleanVideoUrl,
+          mime: "video/mp4",
+          expires_at: null
+        });
       }
     }
 

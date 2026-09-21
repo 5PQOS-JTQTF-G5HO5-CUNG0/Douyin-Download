@@ -9,11 +9,15 @@ import com.douyin.downloader.data.model.MediaItem
 class AndroidMediaDownloader : MediaDownloader {
 
     override fun download(context: Context, media: MediaItem, title: String, id: String) {
+        val mediaType = media.type.ifEmpty { "video" }
+        val mimeType = media.mime ?: if (mediaType == "image") "image/jpeg" else "video/mp4"
         AppDownloadManager.startDownload(
             context = context,
             workId = id,
             title = title,
-            videoUrl = media.url
+            videoUrl = media.url,
+            mediaType = mediaType,
+            mimeType = mimeType
         )
     }
 

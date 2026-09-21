@@ -34,7 +34,9 @@ object AppDownloadManager {
         context: Context,
         workId: String,
         title: String,
-        videoUrl: String
+        videoUrl: String,
+        mediaType: String = "video",
+        mimeType: String = "video/mp4"
     ) {
         resetState()
         val intent = Intent(context, DownloadService::class.java).apply {
@@ -42,6 +44,8 @@ object AppDownloadManager {
             putExtra(DownloadService.EXTRA_WORK_ID, workId)
             putExtra(DownloadService.EXTRA_TITLE, title)
             putExtra(DownloadService.EXTRA_VIDEO_URL, videoUrl)
+            putExtra(DownloadService.EXTRA_MEDIA_TYPE, mediaType)
+            putExtra(DownloadService.EXTRA_MIME_TYPE, mimeType)
         }
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
             context.startForegroundService(intent)

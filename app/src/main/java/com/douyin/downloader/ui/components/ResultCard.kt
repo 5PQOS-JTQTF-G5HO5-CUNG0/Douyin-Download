@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
@@ -180,14 +181,15 @@ fun ResultCard(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    val mediaType = result.media.firstOrNull()?.type?.uppercase() ?: "VIDEO"
+                    val isImage = result.media.firstOrNull()?.type?.lowercase() == "image"
+                    val mediaTypeLabel = if (isImage) "图集" else "视频"
 
                     Surface(
                         shape = RoundedCornerShape(6.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant
                     ) {
                         Text(
-                            text = "无水印 $mediaType · 高清",
+                            text = "无水印 $mediaTypeLabel · 高清",
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -212,7 +214,7 @@ fun ResultCard(
                         Icon(Icons.Default.Download, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "下载视频到相册",
+                            text = if (isImage) "下载图片到相册" else "下载视频到相册",
                             style = MaterialTheme.typography.titleMedium
                         )
                     }
@@ -283,23 +285,25 @@ fun ResultCard(
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.secondary
                             )
+                            val isImageMedia = result.media.firstOrNull()?.type?.lowercase() == "image"
                             Text(
-                                text = "下载完成，已存入相册 (Movies/Douyin)",
+                                text = if (isImageMedia) "下载完成，已存入相册 (Pictures/Douyin)" else "下载完成，已存入相册 (Movies/Douyin)",
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                         }
 
+                        val isImageMedia = result.media.firstOrNull()?.type?.lowercase() == "image"
                         OutlinedButton(
                             onClick = {
-                                openVideoInGallery(context, downloadState.uriString)
+                                openMediaInGallery(context, downloadState.uriString, isImageMedia)
                             },
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(10.dp)
                         ) {
-                            Icon(Icons.Default.PlayArrow, contentDescription = null)
+                            Icon(if (isImageMedia) Icons.Default.Image else Icons.Default.PlayArrow, contentDescription = null)
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("立即在系统相册中播放")
+                            Text(if (isImageMedia) "立即在系统相册中查看" else "立即在系统相册中播放")
                         }
                     }
                 }
@@ -343,10 +347,10 @@ fun ResultCard(
     }
 }
 
-private fun openVideoInGallery(context: Context, uriString: String) {
+private fun openMediaInGallery(context: Context, uriString: String, isImage: Boolean) {
     try {
         val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(Uri.parse(uriString), "video/*")
+            setDataAndType(Uri.parse(uriString), if (isImage) "image/*" else "video/*")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }

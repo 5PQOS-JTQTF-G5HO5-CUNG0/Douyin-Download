@@ -228,9 +228,10 @@ class DownloadService : Service() {
                 try {
                     inputStream?.close()
                     outputStream?.close()
-                } catch (_: Exception) {
+                } catch (ignored: Exception) {
                 }
-                stopForeground(STOP_FOREGROUND_REMOVE)
+                @Suppress("DEPRECATION")
+                stopForeground(true)
                 stopSelf()
             }
         }
@@ -262,7 +263,8 @@ class DownloadService : Service() {
     private fun cancelCurrentDownload() {
         AppDownloadManager.cancelDownload()
         currentDownloadJob?.cancel()
-        stopForeground(STOP_FOREGROUND_REMOVE)
+        @Suppress("DEPRECATION")
+        stopForeground(true)
         stopSelf()
     }
 

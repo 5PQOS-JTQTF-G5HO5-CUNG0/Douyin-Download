@@ -352,7 +352,7 @@ private fun openVideoInGallery(context: Context, uriString: String) {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         context.startActivity(intent)
-    } catch (_: Exception) {
+    } catch (e: Exception) {
         // 若没有默认播放器打开，尝试打开系统相册或文件管理器
         val fallbackIntent = Intent(Intent.ACTION_MAIN).apply {
             addCategory(Intent.CATEGORY_APP_GALLERY)
@@ -360,7 +360,7 @@ private fun openVideoInGallery(context: Context, uriString: String) {
         }
         try {
             context.startActivity(fallbackIntent)
-        } catch (_: Exception) {
+        } catch (ignored: Exception) {
         }
     }
 }

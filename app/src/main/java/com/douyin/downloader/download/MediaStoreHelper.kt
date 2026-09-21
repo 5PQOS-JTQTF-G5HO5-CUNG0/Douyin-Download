@@ -93,7 +93,7 @@ object MediaStoreHelper {
         if (uri == null) return
         try {
             context.contentResolver.delete(uri, null, null)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
         }
     }
 }

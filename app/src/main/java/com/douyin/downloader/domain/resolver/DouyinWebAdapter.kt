@@ -123,12 +123,12 @@ class DouyinWebAdapter(private val okHttpClient: OkHttpClient) {
             val raw = renderMatcher.group(1)?.trim() ?: ""
             val decoded = try {
                 URLDecoder.decode(raw, "UTF-8")
-            } catch (_: Exception) {
+            } catch (e: Exception) {
                 raw
             }
             try {
                 return JSONObject(decoded)
-            } catch (_: Exception) {
+            } catch (e: Exception) {
             }
         }
 
@@ -138,7 +138,7 @@ class DouyinWebAdapter(private val okHttpClient: OkHttpClient) {
             val raw = routerMatcher.group(1)?.trim() ?: ""
             try {
                 return JSONObject(raw)
-            } catch (_: Exception) {
+            } catch (e: Exception) {
             }
         }
 
@@ -148,7 +148,7 @@ class DouyinWebAdapter(private val okHttpClient: OkHttpClient) {
             val raw = ssrMatcher.group(1)?.trim() ?: ""
             try {
                 return JSONObject(raw)
-            } catch (_: Exception) {
+            } catch (e: Exception) {
             }
         }
 

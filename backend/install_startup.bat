@@ -1,4 +1,5 @@
 @echo off
+setlocal
 chcp 65001 >nul
 echo 正在安装 Douyin Resolver 开机静默自启动服务...
 
@@ -11,7 +12,7 @@ powershell -NoProfile -Command "$ws = New-Object -ComObject WScript.Shell; $s = 
 if exist "%SHORTCUT_PATH%" (
     echo [成功] 已添加开机自启快捷方式至：%SHORTCUT_PATH%
     echo 正在首次启动后台静默服务...
-    wscript "%TARGET_VBS%"
+    start "" wscript.exe "%TARGET_VBS%"
     echo [完成] 服务已在后台静默运行中！电脑以后每次开机都会自动运行。
 ) else (
     echo [失败] 无法创建自启快捷方式，请尝试以管理员身份运行。

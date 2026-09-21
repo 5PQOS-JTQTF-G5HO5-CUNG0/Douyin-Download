@@ -1,6 +1,5 @@
 package com.douyin.downloader.ui.screens
 
-import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
@@ -8,12 +7,8 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -32,6 +27,8 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -44,23 +41,28 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.douyin.downloader.data.model.ResolveStage
 import com.douyin.downloader.ui.components.ResultCard
 import com.douyin.downloader.ui.viewmodel.MainViewModel
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     viewModel: MainViewModel,
@@ -69,9 +71,15 @@ fun HomeScreen(
     val context = LocalContext.current
     val inputText by viewModel.inputText.collectAsState()
     val isResolving by viewModel.isResolving.collectAsState()
+    val resolveStage by viewModel.resolveStage.collectAsState()
     val resolveResult by viewModel.resolveResult.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
     val downloadState by viewModel.downloadState.collectAsState()
+    val isMockMode by viewModel.isMockMode.collectAsState()
+    val serverBaseUrl by viewModel.serverBaseUrl.collectAsState()
+
+    var showSettingsDialog by remember { mutableStateOf(false) }
+    var tempServerUrl by remember(serverBaseUrl) { mutableStateOf(serverBaseUrl) }
 
     Scaffold(
         topBar = {
@@ -90,6 +98,15 @@ fun HomeScreen(
                             text = "抖音视频下载助手",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { showSettingsDialog = true }) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "解析服务配置",
+                            tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f)
                         )
                     }
                 },
@@ -194,12 +211,46 @@ fun HomeScreen(
                     } else {
                         Icon(Icons.Default.Search, contentDescription = null)
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("立即解析")
+                        Text(if (isMockMode) "解析 (Mock模式)" else "立即解析")
                     }
                 }
             }
 
-            // 错误提示条
+            // 解析阶段提示条 (UI 规范：正在打开网页环境... 等)
+            AnimatedVisibility(
+                visible = isResolving && resolveStage != ResolveStage.IDLE,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = resolveStage.text,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            // 结构化友好错误提示条 (绝不暴露底层 Argus / 私有签名细节)
             AnimatedVisibility(
                 visible = errorMessage != null,
                 enter = fadeIn() + expandVertically(),
@@ -253,7 +304,7 @@ fun HomeScreen(
                 }
             }
 
-            // 使用指南卡片
+            // 架构与说明卡片
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
@@ -276,13 +327,13 @@ fun HomeScreen(
                             tint = MaterialTheme.colorScheme.primary
                         )
                         Text(
-                            text = "使用指南 (真实抖音解析引擎已就绪)",
+                            text = "Resolver Adapter 架构已就绪",
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                     }
                     Text(
-                        text = "• 支持从抖音 App 点击「分享」→ 选择「抖音下载助手」一键解析。\n• 支持在上方输入框粘贴包含短链接 (v.douyin.com) 的任意分享文案。\n• 自动获取无水印高清视频直链，点击下载自动保存到相册 (Movies/Douyin)。\n• 输入含 'mock' 或 'fail' 等保留词时，可快速体验模拟兜底链路。",
+                        text = "• 后端使用 Chromium 真实浏览器拦截网络数据包，彻底解决 Argus 风控与 HTML_NOT_DATA 阻断。\n• Android 客户端已解耦下载引擎与解析层，若抖音前端再次变更仅需更新后端 BrowserResolver，APK 无需重新发版。\n• 可在右上角「设置」中配置后端局域网地址，或随时开启离线 Mock 模式进行无网络自测。",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                         lineHeight = MaterialTheme.typography.bodyMedium.lineHeight * 1.25
@@ -292,5 +343,59 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
         }
+    }
+
+    // 设置弹窗 (配置后端 API 地址与 Mock 模式切换)
+    if (showSettingsDialog) {
+        AlertDialog(
+            onDismissRequest = { showSettingsDialog = false },
+            title = { Text("解析服务设置") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("内置离线 Mock 模式", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "无需后端服务，脱机自测下载与相册落盘",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
+                        Switch(
+                            checked = isMockMode,
+                            onCheckedChange = { viewModel.toggleMockMode(it) }
+                        )
+                    }
+
+                    if (!isMockMode) {
+                        OutlinedTextField(
+                            value = tempServerUrl,
+                            onValueChange = { tempServerUrl = it },
+                            label = { Text("后端解析服务地址") },
+                            placeholder = { Text("例如 http://192.168.1.100:3000") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    viewModel.updateServerUrl(tempServerUrl)
+                    showSettingsDialog = false
+                }) {
+                    Text("保存")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSettingsDialog = false }) {
+                    Text("取消")
+                }
+            }
+        )
     }
 }

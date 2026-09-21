@@ -9,3 +9,7 @@
 .cxx
 local.properties
 app/build/
+node_modules/
+backend/node_modules/
+build_output.log
+*.log

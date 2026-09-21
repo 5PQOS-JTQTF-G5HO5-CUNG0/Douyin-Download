@@ -49,12 +49,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import com.douyin.downloader.data.model.ResolveResult
+import com.douyin.downloader.data.model.ResolveResponse
 import com.douyin.downloader.download.DownloadState
 
 @Composable
 fun ResultCard(
-    result: ResolveResult,
+    result: ResolveResponse,
     downloadState: DownloadState,
     onStartDownload: () -> Unit,
     onCancelDownload: () -> Unit,
@@ -62,6 +62,8 @@ fun ResultCard(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val authorName = result.author ?: "抖音创作者"
+    val workId = result.id ?: ""
 
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -87,26 +89,28 @@ fun ResultCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    AsyncImage(
-                        model = ImageRequest.Builder(context)
-                            .data(result.author.avatarUrl)
-                            .crossfade(true)
-                            .build(),
-                        contentDescription = "作者头像",
+                    Box(
                         modifier = Modifier
                             .size(36.dp)
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                        contentScale = ContentScale.Crop
-                    )
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = authorName.take(1),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                     Column {
                         Text(
-                            text = result.author.name,
+                            text = authorName,
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "作品 ID: ${result.id}",
+                            text = "作品 ID: $workId",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                         )
@@ -166,7 +170,7 @@ fun ResultCard(
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        text = result.title,
+                        text = result.title ?: "抖音短视频",
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Medium,
                         maxLines = 3,
@@ -176,19 +180,14 @@ fun ResultCard(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    val media = result.media.firstOrNull()
-                    val sizeText = if (media != null && media.sizeBytes > 0) {
-                        String.format("%.1f MB", media.sizeBytes / 1024f / 1024f)
-                    } else {
-                        "高清视频"
-                    }
+                    val mediaType = result.media.firstOrNull()?.type?.uppercase() ?: "VIDEO"
 
                     Surface(
                         shape = RoundedCornerShape(6.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant
                     ) {
                         Text(
-                            text = "$sizeText · 1080P",
+                            text = "无水印 $mediaType · 高清",
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant

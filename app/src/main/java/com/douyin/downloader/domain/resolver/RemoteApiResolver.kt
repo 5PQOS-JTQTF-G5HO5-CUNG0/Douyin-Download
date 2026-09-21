@@ -16,7 +16,7 @@ import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 class RemoteApiResolver(
-    private var baseUrl: String = "http://10.0.2.2:3000" // 模拟器默认访问宿主机 IP，真机可在 UI 动态配置
+    private var baseUrl: String = com.douyin.downloader.data.local.AppPreferences.getServerUrl()
 ) : VideoResolver {
 
     private val json = Json {
@@ -31,6 +31,7 @@ class RemoteApiResolver(
 
     fun updateBaseUrl(newUrl: String) {
         baseUrl = newUrl.trimEnd('/')
+        com.douyin.downloader.data.local.AppPreferences.setServerUrl(baseUrl)
     }
 
     fun getBaseUrl(): String = baseUrl

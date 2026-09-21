@@ -13,6 +13,7 @@ class DouyinApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        com.douyin.downloader.data.local.AppPreferences.init(this)
         createNotificationChannel()
     }
 

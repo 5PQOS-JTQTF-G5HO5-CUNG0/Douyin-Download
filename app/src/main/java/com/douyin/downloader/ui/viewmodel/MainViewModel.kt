@@ -38,7 +38,7 @@ class MainViewModel(
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
-    private val _isMockMode = MutableStateFlow(false)
+    private val _isMockMode = MutableStateFlow(com.douyin.downloader.data.local.AppPreferences.isMockMode())
     val isMockMode: StateFlow<Boolean> = _isMockMode.asStateFlow()
 
     private val _serverBaseUrl = MutableStateFlow(remoteResolver.getBaseUrl())
@@ -67,6 +67,7 @@ class MainViewModel(
 
     fun toggleMockMode(enabled: Boolean) {
         _isMockMode.value = enabled
+        com.douyin.downloader.data.local.AppPreferences.setMockMode(enabled)
     }
 
     fun updateServerUrl(url: String) {

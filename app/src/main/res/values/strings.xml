@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">抖音下载助手</string>
+    <string name="channel_download_name">视频下载</string>
+    <string name="channel_download_desc">显示抖音短视频后台下载进度与状态</string>
+</resources>

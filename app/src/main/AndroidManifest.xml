@@ -13,9 +13,9 @@
     <application
         android:name=".DouyinApp"
         android:allowBackup="true"
-        android:icon="@android:drawable/ic_menu_save"
+        android:icon="@drawable/ic_app_logo"
         android:label="@string/app_name"
-        android:roundIcon="@android:drawable/ic_menu_save"
+        android:roundIcon="@drawable/ic_app_logo"
         android:supportsRtl="true"
         android:theme="@style/Theme.DouyinDownloader"
         android:usesCleartextTraffic="true">

@@ -67,6 +67,7 @@ fun ResultCard(
     val context = LocalContext.current
     val authorName = result.author ?: "抖音创作者"
     val workId = result.id ?: ""
+    val isImage = result.media.firstOrNull()?.type?.lowercase() == "image"
 
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -183,7 +184,6 @@ fun ResultCard(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    val isImage = result.media.firstOrNull()?.type?.lowercase() == "image"
                     val mediaTypeLabel = if (isImage) "图集" else "视频"
 
                     Surface(
@@ -287,15 +287,13 @@ fun ResultCard(
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.secondary
                             )
-                            val isImageMedia = result.media.firstOrNull()?.type?.lowercase() == "image"
                             Text(
-                                text = if (isImageMedia) "下载完成，已存入相册 (Pictures/Douyin)" else "下载完成，已存入相册 (Movies/Douyin)",
+                                text = if (isImage) "下载完成，已存入相册 (Pictures/Douyin)" else "下载完成，已存入相册 (Movies/Douyin)",
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                         }
 
-                        val isImageMedia = result.media.firstOrNull()?.type?.lowercase() == "image"
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -303,7 +301,7 @@ fun ResultCard(
                             // 相册中播放 / 查看
                             OutlinedButton(
                                 onClick = {
-                                    openMediaInGallery(context, downloadState.uriString, isImageMedia)
+                                    openMediaInGallery(context, downloadState.uriString, isImage)
                                 },
                                 modifier = Modifier
                                     .weight(1f)
@@ -311,12 +309,12 @@ fun ResultCard(
                                 shape = RoundedCornerShape(10.dp)
                             ) {
                                 Icon(
-                                    imageVector = if (isImageMedia) Icons.Default.Image else Icons.Default.PlayArrow,
+                                    imageVector = if (isImage) Icons.Default.Image else Icons.Default.PlayArrow,
                                     contentDescription = null,
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text(if (isImageMedia) "相册查看" else "相册播放")
+                                Text(if (isImage) "相册查看" else "相册播放")
                             }
 
                             // 分享到其他应用（微信、QQ等）
@@ -325,7 +323,7 @@ fun ResultCard(
                                     ShareHelper.shareMedia(
                                         context = context,
                                         uriString = downloadState.uriString,
-                                        isImage = isImageMedia,
+                                        isImage = isImage,
                                         title = result.title
                                     )
                                 },
@@ -343,7 +341,7 @@ fun ResultCard(
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text(if (isImageMedia) "分享图片" else "分享视频")
+                                Text(if (isImage) "分享图片" else "分享视频")
                             }
                         }
                     }

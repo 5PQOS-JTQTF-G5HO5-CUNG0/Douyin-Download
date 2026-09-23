@@ -36,6 +36,7 @@ for %%i in ("%APP_HOME%") do set APP_HOME=%%~fi
 set DEFAULT_JVM_OPTS="-Xmx64m" "-Xms64m"
 
 @rem Find java.exe
+if not defined JAVA_HOME for /d %%D in ("%USERPROFILE%\.jdks\jdk-17*") do if exist "%%D\bin\java.exe" set "JAVA_HOME=%%D"
 if defined JAVA_HOME goto findJavaFromJavaHome
 
 set JAVA_EXE=java.exe

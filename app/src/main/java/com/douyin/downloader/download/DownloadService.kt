@@ -12,6 +12,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.douyin.downloader.DouyinApp
 import com.douyin.downloader.MainActivity
+import com.douyin.downloader.util.ShareHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -229,7 +230,7 @@ class DownloadService : Service() {
                         fileName = fileName
                     )
                 )
-                showSuccessNotification(title, mediaType)
+                showSuccessNotification(title, mediaType, targetUri.toString())
 
             } catch (e: Exception) {
                 if (e is InterruptedException || AppDownloadManager.isDownloadCancelled()) {
@@ -254,7 +255,7 @@ class DownloadService : Service() {
         }
     }
 
-    private fun showSuccessNotification(title: String, mediaType: String = "video") {
+    private fun showSuccessNotification(title: String, mediaType: String = "video", uriString: String? = null) {
         val openAppIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
@@ -266,15 +267,27 @@ class DownloadService : Service() {
         )
 
         val typeText = if (mediaType == "image") "图片" else "视频"
-        val notification = NotificationCompat.Builder(this, DouyinApp.DOWNLOAD_CHANNEL_ID)
+        val notificationBuilder = NotificationCompat.Builder(this, DouyinApp.DOWNLOAD_CHANNEL_ID)
             .setContentTitle("${typeText}下载完成，已保存到相册")
             .setContentText(title)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
             .setContentIntent(pendingOpenApp)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .build()
-        NotificationManagerCompat.from(this).notify(SUCCESS_NOTIFICATION_ID, notification)
+
+        if (uriString != null) {
+            val isImage = mediaType == "image"
+            val shareIntent = ShareHelper.createShareChooserIntent(this, uriString, isImage, title)
+            val pendingShare = PendingIntent.getActivity(
+                this,
+                2,
+                shareIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            notificationBuilder.addAction(android.R.drawable.ic_menu_share, "分享", pendingShare)
+        }
+
+        NotificationManagerCompat.from(this).notify(SUCCESS_NOTIFICATION_ID, notificationBuilder.build())
     }
 
     private fun cancelCurrentDownload() {

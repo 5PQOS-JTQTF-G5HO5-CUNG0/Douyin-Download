@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -52,6 +53,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.douyin.downloader.data.model.ResolveResponse
 import com.douyin.downloader.download.DownloadState
+import com.douyin.downloader.util.ShareHelper
 
 @Composable
 fun ResultCard(
@@ -274,7 +276,7 @@ fun ResultCard(
                 is DownloadState.Completed -> {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -294,16 +296,55 @@ fun ResultCard(
                         }
 
                         val isImageMedia = result.media.firstOrNull()?.type?.lowercase() == "image"
-                        OutlinedButton(
-                            onClick = {
-                                openMediaInGallery(context, downloadState.uriString, isImageMedia)
-                            },
+                        Row(
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(10.dp)
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Icon(if (isImageMedia) Icons.Default.Image else Icons.Default.PlayArrow, contentDescription = null)
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(if (isImageMedia) "立即在系统相册中查看" else "立即在系统相册中播放")
+                            // 相册中播放 / 查看
+                            OutlinedButton(
+                                onClick = {
+                                    openMediaInGallery(context, downloadState.uriString, isImageMedia)
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(46.dp),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (isImageMedia) Icons.Default.Image else Icons.Default.PlayArrow,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(if (isImageMedia) "相册查看" else "相册播放")
+                            }
+
+                            // 分享到其他应用（微信、QQ等）
+                            Button(
+                                onClick = {
+                                    ShareHelper.shareMedia(
+                                        context = context,
+                                        uriString = downloadState.uriString,
+                                        isImage = isImageMedia,
+                                        title = result.title
+                                    )
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(46.dp),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary
+                                )
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Share,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(if (isImageMedia) "分享图片" else "分享视频")
+                            }
                         }
                     }
                 }
@@ -349,8 +390,9 @@ fun ResultCard(
 
 private fun openMediaInGallery(context: Context, uriString: String, isImage: Boolean) {
     try {
+        val viewUri = ShareHelper.getShareableUri(context, uriString)
         val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(Uri.parse(uriString), if (isImage) "image/*" else "video/*")
+            setDataAndType(viewUri, if (isImage) "image/*" else "video/*")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
